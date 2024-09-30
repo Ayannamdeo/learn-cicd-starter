@@ -1,9 +1,9 @@
 package auth_test
 
 import (
+	"errors"
 	"net/http"
 	"testing"
-	"errors"
 
 	"github.com/bootdotdev/learn-cicd-starter/internal/auth"
 )
