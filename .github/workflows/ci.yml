@@ -40,5 +40,5 @@ jobs:
       - name: Run go fmt
         run: test -z $(go fmt ./...)
 
-      - name: Check styleccheck lint
-        run: styleccheck ./...
+      - name: Check staticcheck lint
+        run: staticcheck ./...
