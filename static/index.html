@@ -27,15 +27,37 @@
 
     <script>
       const API_BASE = "/v1";
-      let currentUserAPIKey = null;
+      let currentUserAPIKey = localStorage.getItem("currentUserAPIKey") || null;
       let currentUser = null;
 
+      async function createUser() {
+        const nameField = document.getElementById("nameField");
+
+        const response = await fetchWithAlert(`${API_BASE}/users`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: nameField.value }),
+        });
+
+        if (response.ok) {
+          const user = await response.json();
+          currentUserAPIKey = user.api_key;
+          localStorage.setItem("currentUserAPIKey", currentUserAPIKey);
+          currentUser = user;
+          updateUIForAuthenticatedUser();
+          alert(`User Created: ${user.name}`);
+        } else {
+          alert("Error creating user. Please try again.");
+        }
+      }
+
       async function createNote() {
-        if (!currentUser) {
-          alert("Please create a user first");
+        if (!currentUserAPIKey) {
+          alert("Please log in first.");
           return;
         }
         const noteContent = document.getElementById("newNoteContent").value;
+
         const response = await fetchWithAlert(`${API_BASE}/notes`, {
           method: "POST",
           headers: {
@@ -44,28 +66,41 @@
           },
           body: JSON.stringify({ note: noteContent }),
         });
-        const note = await response.json();
-        displayNote(note);
+
+        if (response.ok) {
+          const note = await response.json();
+          displayNote(note);
+        } else {
+          alert("Error creating note. Please try again.");
+        }
       }
 
       async function getUser() {
         const response = await fetchWithAlert(`${API_BASE}/users`, {
           headers: { Authorization: `ApiKey ${currentUserAPIKey}` },
         });
-        return await response.json();
+        if (response.ok) {
+          return await response.json();
+        } else {
+          alert("Error fetching user information.");
+        }
       }
 
       async function loadNotes() {
-        if (!currentUser) {
+        if (!currentUserAPIKey) {
           return;
         }
         const response = await fetchWithAlert(`${API_BASE}/notes`, {
           headers: { Authorization: `ApiKey ${currentUserAPIKey}` },
         });
-        const notes = await response.json();
-        const notesContainer = document.getElementById("notes");
-        notesContainer.innerHTML = "";
-        notes.forEach((note) => displayNote(note));
+        if (response.ok) {
+          const notes = await response.json();
+          const notesContainer = document.getElementById("notes");
+          notesContainer.innerHTML = "";
+          notes.forEach((note) => displayNote(note));
+        } else {
+          alert("Error loading notes.");
+        }
       }
 
       function displayNote(note) {
@@ -75,61 +110,46 @@
         document.getElementById("notes").appendChild(noteElement);
       }
 
-      async function createUser() {
-        const nameField = document.getElementById("nameField");
-        const response = await fetchWithAlert(`${API_BASE}/users`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: nameField.value }), // using the value from nameField
-        });
-        const user = await response.json();
-        localStorage.setItem("currentUserAPIKey", user.api_key);
-        login();
-        alert(`User Created: ${user.name}`);
-
-        // Once a user is created, hide the user creation section and show the note section
-        document.getElementById("userCreationContainer").style.display = "none";
-        document.getElementById("noteSection").style.display = "flex";
-      }
-
       function logout() {
         localStorage.removeItem("currentUserAPIKey");
+        currentUserAPIKey = null;
         currentUser = null;
+        updateUIForUnauthenticatedUser();
+      }
 
-        // When a user logs out, show the user creation section and hide the note section
+      async function login() {
+        if (!currentUserAPIKey) {
+          return;
+        }
+        currentUser = await getUser();
+        if (currentUser) {
+          updateUIForAuthenticatedUser();
+          await loadNotes();
+        }
+      }
+
+      function updateUIForAuthenticatedUser() {
+        document.getElementById("userCreationContainer").style.display = "none";
+        document.getElementById("noteSection").style.display = "flex";
+        document.getElementById("greetingMessage").textContent =
+          `Hello ${currentUser.name}!`;
+      }
+
+      function updateUIForUnauthenticatedUser() {
         document.getElementById("userCreationContainer").style.display =
           "block";
         document.getElementById("noteSection").style.display = "none";
       }
 
-      async function login() {
-        currentUserAPIKey = localStorage.getItem("currentUserAPIKey");
-        if (!currentUserAPIKey) {
-          return;
-        }
-        const user = await getUser();
-        currentUser = user;
-        currentUserAPIKey = user.api_key;
-        await loadNotes();
-
-        // When a user logs in, hide the user creation section and show the note section
-        document.getElementById("userCreationContainer").style.display = "none";
-        document.getElementById("noteSection").style.display = "flex";
-
-        // Display a greeting message
-        document.getElementById("greetingMessage").textContent =
-          `Hello ${user.name}!`;
-      }
-
       async function fetchWithAlert(url, options) {
         const response = await fetch(url, options);
-        if (response.status > 299) {
+        if (response.status >= 400) {
           alert(`Error: ${response.status}`);
-          return;
         }
         return response;
       }
 
+      // Attempt to log in on page load if API key is in localStorage
       login();
     </script>
 
